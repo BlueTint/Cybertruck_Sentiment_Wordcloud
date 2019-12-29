@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Dec 18 23:16:56 2019
+
+@author: phillip
+"""
+from twitterscraper import query_tweets
+from langdetect import detect
+import datetime as dt
+import pandas as pd
+
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from langdetect import detect
+import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
+import seaborn as sb
+
+import nltk
+import string
+import re
+import numpy as np
+
+from wordcloud import WordCloud, ImageColorGenerator, STOPWORDS
+from PIL import Image
+from os import path, getcwd
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from string import punctuation
+
+def detector(x):
+    try:
+        return detect(x)
+    except:
+        None
+
+%matplotlib inline
+
+# two days pre-launch
+begin_d = dt.date(2019,11,19)
+end_d = dt.date(2019,11,20)
+
+# cybertruck Launch + post 24 hours
+begin_d2 = dt.date(2019,11,21)
+end_d2 = dt.date(2019,11,23)
+
+# one week post-launch
+begin_d3 = dt.date(2019,11,26)
+end_d3 = dt.date(2019,11,29)
+
+limit = 3000
+
+
+# tweets pre-launch
+# Users
+tweets = query_tweets('cybertruck', begindate = begin_d, enddate = end_d, limit=limit)
+# tweets launch
+# Users
+tweets2 = query_tweets('cybertruck', begindate = begin_d2, enddate = end_d2, limit = limit)
+# tweets pre-launch
+# Users
+tweets3 = query_tweets('cybertruck', begindate = begin_d3, enddate = end_d3, limit=limit)
+
+
+df = pd.DataFrame(t.__dict__ for t in tweets)
+df2 = pd.DataFrame(t.__dict__ for t in tweets2)
+df3 = pd.DataFrame(t.__dict__ for t in tweets3)
+
+
+df['lang'] = df['text'].apply(lambda x: detector(x))
+df = df[df['lang'] == 'en']
+df2['lang'] = df2['text'].apply(lambda x: detector(x))
+df2 = df2[df2['lang'] == 'en'] 
+df3['lang'] = df3['text'].apply(lambda x: detector(x))
+df3 = df3[df3['lang'] == 'en'] 
+
+
+# DF_Export_csv
+export_csv = df.to_csv('/Datasets/cbrtrk_1.csv')
+print(df)
+export_csv2 = df2.to_csv('/Datasets/cbrtrk_2.csv')
+print(df2)
+export_csv3 = df3.to_csv('/Datasets/cbrtrk_3.csv')
+print(df3)
+
+
+#### Post Launch #### 
+
+# tweets post launch
+# Users
+
+#tweets3 = query_tweets('cybertruck', begindate = begin_d3, enddate = end_d3, limit = limit)
+
+#df3 = pd.DataFrame(t.__dict__ for t in tweets3)
+
+#df3['lang'] = df3['text'].apply(lambda x: detector(x))
+#df3 = df3[df3['lang'] == 'en'] 
+
+#export_csv3 = df3.to_csv('/Datasets/cbrtrk_3.csv')
+#print(df3)
+
+
+##### Sentiment Analysis ####
+
+analyzer = SentimentIntensityAnalyzer()
+
+df = pd.read_csv('/cbrtrk_1.csv')
+df2 = pd.read_csv('/cbrtrk_2.csv')
+df3 = pd.read_csv('/Datasets/cbrtrk_3.csv')
+
+
+#df_pre.isnull()
+#df_post.isnull()
+#df_pre.drop('parent_tweet_id', axis=1, inplace=True)
+#df_post.drop('parent_tweet_id', axis=1, inplace=True)
+#df_pre.head(10)
+## SA
+sent_pre = df['text'].apply(lambda x: analyzer.polarity_scores(x))
+sent_launch = df2['text'].apply(lambda x: analyzer.polarity_scores(x))
+sent_post = df3['text'].apply(lambda x: analyzer.polarity_scores(x))
+
+
+df = pd.concat([df, sent_pre.apply(pd.Series)],1)
+df2 = pd.concat([df2, sent_launch.apply(pd.Series)],1)
+df3 = pd.concat([df3, sent_post.apply(pd.Series)],1)
+
+### Analysis
+
+df.text.isnull()
+
+df['compound'].hist()
+df2['compound'].hist()
+df3['compound'].hist()
+
+df['compound'].mean()
+df2['compound'].mean()
+df3['compound'].mean()
+
+
+ratio_pre = df[df['compound'] > 0].shape[0] / df[df['compound'] < 0].shape[0]
+print(ratio_pre)
+ratio_launch = df2[df2['compound'] > 0].shape[0] / df2[df2['compound'] < 0].shape[0]
+print(ratio_launch)
+ratio_post = df3[df3['compound'] > 0].shape[0] / df3[df3['compound'] < 0].shape[0]
+print(ratio_post)
+
+pre_ed = df[df['compound'] != 0]
+launch_ed = df2[df2['compound'] != 0]
+post_ed = df3[df3['compound'] != 0]
+
+pre_ed['compound'].sample(210).hist()
+launch_ed['compound'].sample(1000).hist()
+post_ed['compound'].sample(1000).hist()
+
+
+#### Preprocessing ####
+
+# Lowercase
+df.text = df.text.apply(lambda x: x.lower())
+df2.text = df2.text.apply(lambda x: x.lower())
+df3.text = df3.text.apply(lambda x: x.lower())
+
+# Removing punctuation
+table = str.maketrans(dict.fromkeys(string.punctuation))
+
+def remove_punctuation(text):
+    return text.translate(table)
+    
+df['text'] = df['text'].apply(remove_punctuation)
+df2['text'] = df2['text'].apply(remove_punctuation)
+df3['text'] = df3['text'].apply(remove_punctuation)
+
+
+df01 = ' '.join(df['text'].tolist())
+df02 = ' '.join(df2['text'].tolist())
+df03 = ' '.join(df3['text'].tolist())
+# tokenize
+
+df_tokenize = df['text'].apply(word_tokenize)
+df2_tokenize = df2['text'].apply(word_tokenize)
+df3_tokenize = df3['text'].apply(word_tokenize)
+
+
+#### Wordcloud
+
+# Wordcloud test
+wordcloud = WordCloud().generate(df01)
+# Display generated image:
+plt.imshow(wordcloud, interpolation='bilinear')
+plt.axis("off")
+plt.show()
+
+
+# Stopwords
+# sw = set(stopwords.words('english'))
+g = getcwd()
+
+mask_logo = np.array(Image.open(path.join(g, '/bigtruckkas.png')))
+
+wc= WordCloud(background_color="white", width = 800, height = 800, max_words=300, max_font_size=90, random_state=1, mask=mask_logo, stopwords=STOPWORDS)
+wc.generate(df03)
+
+image_colors = ImageColorGenerator(mask_logo)
+
+plt.figure(figsize=[20,20])
+plt.imshow(wc.recolor(color_func=image_colors), interpolation="bilinear")
+plt.axis('off')
+plt.show()
